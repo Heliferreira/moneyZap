@@ -6,20 +6,17 @@ const app = express();
 
 app.use(express.json());
 
-// ✅ Rota padrão de status
+// ✅ Rota básica
 app.get('/', (req, res) => {
   res.send('MoneyZap rodando 🔥');
 });
 
-// ✅ Caminho para o arquivo de dados
 const arquivoGastos = path.join(__dirname, 'gastos.json');
 
-// ✅ Criar arquivo se não existir
 if (!fs.existsSync(arquivoGastos)) {
   fs.writeFileSync(arquivoGastos, '[]');
 }
 
-// ✅ Função para ler gastos com segurança
 function lerGastos() {
   try {
     const dados = fs.readFileSync(arquivoGastos);
@@ -30,24 +27,51 @@ function lerGastos() {
   }
 }
 
-// ✅ Função para salvar gasto
 function salvarGasto(gasto) {
   const dados = lerGastos();
   dados.push(gasto);
   fs.writeFileSync(arquivoGastos, JSON.stringify(dados, null, 2));
 }
 
-// ✅ Rota principal do webhook
+// ✅ Webhook
 app.post('/webhook', (req, res) => {
   const mensagem = req.body.message?.toLowerCase() || '';
   const numero = req.body.from || 'desconhecido';
   const hoje = new Date().toISOString().split('T')[0];
 
-  // Extrair valor
+  // ✅ Relatório via comando
+  if (mensagem.includes('meu relatório')) {
+    const gastos = lerGastos();
+    const meusGastos = gastos.filter(g => g.usuario === numero);
+
+    if (meusGastos.length === 0) {
+      return res.send('Nenhum gasto encontrado para você ainda 😕');
+    }
+
+    let total = 0;
+    const categorias = {};
+
+    for (const gasto of meusGastos) {
+      total += gasto.valor;
+      if (!categorias[gasto.categoria]) {
+        categorias[gasto.categoria] = 0;
+      }
+      categorias[gasto.categoria] += gasto.valor;
+    }
+
+    let resposta = `📊 *Seu relatório:*\n- Total: R$ ${total.toFixed(2)}\n`;
+    for (const cat in categorias) {
+      resposta += `- ${cat}: R$ ${categorias[cat].toFixed(2)}\n`;
+    }
+    resposta += `- Lançamentos: ${meusGastos.length}`;
+
+    return res.send(resposta);
+  }
+
+  // ✅ Registrar gasto
   const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
   const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
 
-  // Detectar categoria
   let categoriaDetectada = 'Outros';
   for (const palavra in categorias) {
     if (mensagem.includes(palavra)) {
@@ -60,7 +84,6 @@ app.post('/webhook', (req, res) => {
     return res.send('Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
   }
 
-  // Criar gasto
   const gasto = {
     usuario: numero,
     valor,
@@ -74,7 +97,7 @@ app.post('/webhook', (req, res) => {
   res.send(`Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${hoje}`);
 });
 
-// ✅ NOVA ROTA: Relatório por usuário
+// ✅ Relatório via navegador
 app.get('/relatorio/:usuario', (req, res) => {
   const usuario = req.params.usuario;
   const gastos = lerGastos();
