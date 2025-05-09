@@ -6,7 +6,7 @@ const app = express();
 
 app.use(express.json());
 
-// ✅ Rota básica
+// Rota padrão
 app.get('/', (req, res) => {
   res.send('MoneyZap rodando 🔥');
 });
@@ -33,42 +33,81 @@ function salvarGasto(gasto) {
   fs.writeFileSync(arquivoGastos, JSON.stringify(dados, null, 2));
 }
 
-// ✅ Webhook
+function gerarResumo(gastos, tipo) {
+  let total = 0;
+  const categorias = {};
+
+  for (const gasto of gastos) {
+    total += gasto.valor;
+    if (!categorias[gasto.categoria]) {
+      categorias[gasto.categoria] = 0;
+    }
+    categorias[gasto.categoria] += gasto.valor;
+  }
+
+  let resposta = `📊 *Seu relatório ${tipo}:*\n- Total: R$ ${total.toFixed(2)}\n`;
+  for (const cat in categorias) {
+    resposta += `- ${cat}: R$ ${categorias[cat].toFixed(2)}\n`;
+  }
+  resposta += `- Lançamentos: ${gastos.length}`;
+  return resposta;
+}
+
+// Webhook
 app.post('/webhook', (req, res) => {
   const mensagem = req.body.message?.toLowerCase() || '';
   const numero = req.body.from || 'desconhecido';
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = new Date();
+  const gastos = lerGastos();
 
-  // ✅ Relatório via comando
+  // Relatório semanal: domingo até hoje
+  if (mensagem.includes('relatório semanal')) {
+    const diaDaSemana = hoje.getDay(); // 0 = domingo
+    const domingo = new Date(hoje);
+    domingo.setDate(hoje.getDate() - diaDaSemana);
+
+    const meusGastos = gastos.filter(g => {
+      const data = new Date(g.data);
+      return g.usuario === numero && data >= domingo && data <= hoje;
+    });
+
+    if (meusGastos.length === 0) {
+      return res.send('Nenhum gasto registrado entre domingo e hoje 🗓️');
+    }
+
+    return res.send(gerarResumo(meusGastos, 'semanal (domingo a hoje)'));
+  }
+
+  // Relatório mensal: 1º dia do mês até hoje
+  if (mensagem.includes('relatório mensal')) {
+    const mesAtual = hoje.getMonth();
+    const anoAtual = hoje.getFullYear();
+    const primeiroDiaDoMes = new Date(anoAtual, mesAtual, 1);
+
+    const meusGastos = gastos.filter(g => {
+      const data = new Date(g.data);
+      return g.usuario === numero && data >= primeiroDiaDoMes && data <= hoje;
+    });
+
+    if (meusGastos.length === 0) {
+      return res.send('Nenhum gasto encontrado neste mês 🗓️');
+    }
+
+    return res.send(gerarResumo(meusGastos, 'mensal (1º até hoje)'));
+  }
+
+  // Relatório geral
   if (mensagem.includes('meu relatório')) {
-    const gastos = lerGastos();
     const meusGastos = gastos.filter(g => g.usuario === numero);
 
     if (meusGastos.length === 0) {
       return res.send('Nenhum gasto encontrado para você ainda 😕');
     }
 
-    let total = 0;
-    const categorias = {};
-
-    for (const gasto of meusGastos) {
-      total += gasto.valor;
-      if (!categorias[gasto.categoria]) {
-        categorias[gasto.categoria] = 0;
-      }
-      categorias[gasto.categoria] += gasto.valor;
-    }
-
-    let resposta = `📊 *Seu relatório:*\n- Total: R$ ${total.toFixed(2)}\n`;
-    for (const cat in categorias) {
-      resposta += `- ${cat}: R$ ${categorias[cat].toFixed(2)}\n`;
-    }
-    resposta += `- Lançamentos: ${meusGastos.length}`;
-
-    return res.send(resposta);
+    return res.send(gerarResumo(meusGastos, 'geral'));
   }
 
-  // ✅ Registrar gasto
+  // Cadastro de novo gasto
   const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
   const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
 
@@ -88,16 +127,16 @@ app.post('/webhook', (req, res) => {
     usuario: numero,
     valor,
     categoria: categoriaDetectada,
-    data: hoje
+    data: hoje.toISOString().split('T')[0]
   };
 
   salvarGasto(gasto);
 
   console.log(`Gasto registrado: ${JSON.stringify(gasto)}`);
-  res.send(`Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${hoje}`);
+  res.send(`Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`);
 });
 
-// ✅ Relatório via navegador
+// Rota de relatório por navegador
 app.get('/relatorio/:usuario', (req, res) => {
   const usuario = req.params.usuario;
   const gastos = lerGastos();
@@ -128,7 +167,6 @@ app.get('/relatorio/:usuario', (req, res) => {
   res.json(resposta);
 });
 
-// ✅ Iniciar servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Bot rodando na porta ${PORT}`);
