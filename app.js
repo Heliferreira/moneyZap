@@ -44,6 +44,9 @@ app.post('/webhook', (req, res) => {
   res.send(`Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${hoje}`);
 });
 
-app.listen(3000, () => {
-  console.log('Bot rodando em http://localhost:3000');
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Bot rodando na porta ${PORT}`);
 });
+
