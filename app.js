@@ -5,6 +5,11 @@ const app = express();
 
 app.use(express.json());
 
+// ✅ Rota principal para teste no Render
+app.get('/', (req, res) => {
+  res.send('MoneyZap rodando 🔥');
+});
+
 app.post('/webhook', (req, res) => {
   const mensagem = req.body.message?.toLowerCase() || '';
   const numero = req.body.from || 'desconhecido';
@@ -49,4 +54,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Bot rodando na porta ${PORT}`);
 });
-
