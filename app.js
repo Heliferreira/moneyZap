@@ -62,7 +62,7 @@ app.post('/webhook', (req, res) => {
 
   // Relatório semanal: domingo até hoje
   if (mensagem.includes('relatório semanal')) {
-    const diaDaSemana = hoje.getDay(); // 0 = domingo
+    const diaDaSemana = hoje.getDay();
     const domingo = new Date(hoje);
     domingo.setDate(hoje.getDate() - diaDaSemana);
 
@@ -78,7 +78,7 @@ app.post('/webhook', (req, res) => {
     return res.send(gerarResumo(meusGastos, 'semanal (domingo a hoje)'));
   }
 
-  // Relatório mensal: 1º dia do mês até hoje
+  // Relatório mensal: 1º do mês até hoje
   if (mensagem.includes('relatório mensal')) {
     const mesAtual = hoje.getMonth();
     const anoAtual = hoje.getFullYear();
@@ -165,6 +165,21 @@ app.get('/relatorio/:usuario', (req, res) => {
   };
 
   res.json(resposta);
+});
+
+// ✅ Rota de backup: gera download do arquivo gastos.json
+app.get('/backup', (req, res) => {
+  try {
+    const dados = fs.readFileSync(arquivoGastos);
+    const nomeArquivo = `gastos-backup-${Date.now()}.json`;
+
+    res.header('Content-Type', 'application/json');
+    res.attachment(nomeArquivo);
+    res.send(dados);
+  } catch (err) {
+    console.error('Erro ao gerar backup:', err);
+    res.status(500).send('Erro ao gerar backup.');
+  }
 });
 
 const PORT = process.env.PORT || 3000;
