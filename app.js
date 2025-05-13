@@ -72,6 +72,7 @@ app.post('/webhook', async (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
   const mensagem = req.body.texto?.message?.toLowerCase() || '';
+  console.log('📨 Mensagem recebida:', mensagem);
   const numero = req.body.telefone || 'desconhecido';
   const hoje = new Date();
   const gastos = lerGastos();
