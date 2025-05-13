@@ -128,8 +128,13 @@ app.post('/webhook', async (req, res) => {
   }
 
   // Cadastro de gasto
-  const valorMatch = mensagem.replace(/\s+/g, ' ').match(/(\d+[\.,]?\d*)/);
-  const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
+const textoLimpo = mensagem.replace(/\s+/g, ' ');
+console.log('🧾 Texto limpo:', textoLimpo);
+
+const valorMatch = textoLimpo.match(/(\d+[\.,]?\d*)/);
+console.log('🔍 Resultado do match:', valorMatch);
+
+const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
 
   let categoriaDetectada = 'Outros';
   for (const palavra in categorias) {
