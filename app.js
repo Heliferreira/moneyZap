@@ -72,10 +72,11 @@ app.post('/webhook', async (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
   const mensagem = req.body.texto?.message?.toLowerCase() || '';
-  console.log('📨 Mensagem recebida:', mensagem);
   const numero = req.body.telefone || 'desconhecido';
   const hoje = new Date();
   const gastos = lerGastos();
+
+  console.log('📨 Mensagem recebida:', mensagem);
 
   // Relatório semanal
   if (mensagem.includes('relatório semanal')) {
@@ -128,13 +129,19 @@ app.post('/webhook', async (req, res) => {
   }
 
   // Cadastro de gasto
-const textoLimpo = mensagem.replace(/\s+/g, ' ');
-console.log('🧾 Texto limpo:', textoLimpo);
+  const textoLimpo = mensagem.replace(/\s+/g, ' ').trim();
+  console.log('🧾 Texto limpo:', textoLimpo);
 
-const valorMatch = textoLimpo.match(/(\d+[\.,]?\d*)/);
-console.log('🔍 Resultado do match:', valorMatch);
+  const valorMatch = textoLimpo.match(/\d+(?:[\.,]\d{1,2})?/);
+  console.log('🔍 Resultado do match:', valorMatch);
 
-const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
+  const valor = valorMatch ? parseFloat(valorMatch[0].replace(',', '.')) : null;
+
+  if (!valor) {
+    console.log('🔴 Nenhum valor reconhecido na mensagem:', textoLimpo);
+    await enviarResposta(numero, '❌ Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
+    return res.sendStatus(200);
+  }
 
   let categoriaDetectada = 'Outros';
   for (const palavra in categorias) {
@@ -142,11 +149,6 @@ const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
       categoriaDetectada = categorias[palavra];
       break;
     }
-  }
-
-  if (!valor) {
-    await enviarResposta(numero, '❌ Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
-    return res.sendStatus(200);
   }
 
   const gasto = {
@@ -157,7 +159,7 @@ const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
   };
 
   salvarGasto(gasto);
-  console.log(`Gasto registrado: ${JSON.stringify(gasto)}`);
+  console.log(`✅ Gasto registrado: ${JSON.stringify(gasto)}`);
 
   const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`;
   await enviarResposta(numero, resposta);
