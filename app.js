@@ -133,7 +133,6 @@ app.post('/webhook', (req, res) => {
   res.send(`Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`);
 });
 
-
 // 🔎 Relatório por navegador
 app.get('/relatorio/:usuario', (req, res) => {
   const usuario = req.params.usuario;
