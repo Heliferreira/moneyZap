@@ -71,12 +71,20 @@ function gerarResumo(gastos, tipo) {
 app.post('/webhook', async (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
-  const mensagem = req.body.texto?.message?.toLowerCase() || '';
-  const numero = req.body.telefone || 'desconhecido';
-  const hoje = new Date();
-  const gastos = lerGastos();
+  let mensagem = '';
+  try {
+    mensagem = String(req.body.texto?.message || '').toLowerCase().trim();
+  } catch (err) {
+    console.log('❌ Erro ao extrair mensagem:', err.message);
+  }
 
   console.log('📨 Mensagem recebida:', mensagem);
+
+  const numero = req.body.telefone || 'desconhecido';
+  console.log('📱 Número recebido:', numero);
+
+  const hoje = new Date();
+  const gastos = lerGastos();
 
   // Relatório semanal
   if (mensagem.includes('relatório semanal')) {
@@ -93,6 +101,7 @@ app.post('/webhook', async (req, res) => {
       ? 'Nenhum gasto registrado entre domingo e hoje 🗓️'
       : gerarResumo(meusGastos, 'semanal (domingo a hoje)');
 
+    console.log(`🔄 Enviando para Z-API: ${numero} => ${resposta}`);
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
@@ -112,6 +121,7 @@ app.post('/webhook', async (req, res) => {
       ? 'Nenhum gasto registrado neste mês 🗓️'
       : gerarResumo(meusGastos, 'mensal (1º até hoje)');
 
+    console.log(`🔄 Enviando para Z-API: ${numero} => ${resposta}`);
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
@@ -124,6 +134,7 @@ app.post('/webhook', async (req, res) => {
       ? 'Nenhum gasto encontrado para você ainda 😕'
       : gerarResumo(meusGastos, 'geral');
 
+    console.log(`🔄 Enviando para Z-API: ${numero} => ${resposta}`);
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
@@ -162,6 +173,7 @@ app.post('/webhook', async (req, res) => {
   console.log(`✅ Gasto registrado: ${JSON.stringify(gasto)}`);
 
   const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`;
+  console.log(`🔄 Enviando para Z-API: ${numero} => ${resposta}`);
   await enviarResposta(numero, resposta);
   res.sendStatus(200);
 });
