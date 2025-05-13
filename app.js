@@ -55,7 +55,7 @@ function gerarResumo(gastos, tipo) {
 
 // Webhook
 app.post('/webhook', (req, res) => {
-  const mensagem = req.body.message?.toLowerCase() || '';
+  const mensagem = req.body.message?.text?.toLowerCase() || '';
   const numero = req.body.from || 'desconhecido';
   const hoje = new Date();
   const gastos = lerGastos();
