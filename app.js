@@ -54,7 +54,6 @@ app.post('/webhook', (req, res) => {
 
   const mensagem = req.body.texto?.message?.toLowerCase() || '';
   const numero = req.body.telefone || 'desconhecido';
-
   const hoje = new Date();
   const gastos = lerGastos();
 
@@ -129,10 +128,11 @@ app.post('/webhook', (req, res) => {
   };
 
   salvarGasto(gasto);
-
   console.log(`Gasto registrado: ${JSON.stringify(gasto)}`);
+
   res.send(`Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`);
 });
+
 
 // 🔎 Relatório por navegador
 app.get('/relatorio/:usuario', (req, res) => {
