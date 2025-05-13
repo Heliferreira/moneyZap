@@ -6,11 +6,6 @@ const app = express();
 
 app.use(express.json());
 
-// Rota padrão
-app.get('/', (req, res) => {
-  res.send('MoneyZap rodando 🔥');
-});
-
 const arquivoGastos = path.join(__dirname, 'gastos.json');
 
 if (!fs.existsSync(arquivoGastos)) {
@@ -53,17 +48,21 @@ function gerarResumo(gastos, tipo) {
   return resposta;
 }
 
-// Webhook
+// 🟢 Webhook da Z-API
 app.post('/webhook', (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
-  
-  const mensagem = req.body.message?.text?.toLowerCase() || '';
-  const numero = req.body.from || 'desconhecido';
+  const mensagem =
+    req.body.message?.text?.toLowerCase() ||
+    req.body.text?.toLowerCase() ||
+    req.body.message?.toLowerCase() ||
+    '';
+
+  const numero = req.body.phone || req.body.from || 'desconhecido';
   const hoje = new Date();
   const gastos = lerGastos();
 
-  // Relatório semanal: domingo até hoje
+  // Relatório semanal
   if (mensagem.includes('relatório semanal')) {
     const diaDaSemana = hoje.getDay();
     const domingo = new Date(hoje);
@@ -81,19 +80,19 @@ app.post('/webhook', (req, res) => {
     return res.send(gerarResumo(meusGastos, 'semanal (domingo a hoje)'));
   }
 
-  // Relatório mensal: 1º do mês até hoje
+  // Relatório mensal
   if (mensagem.includes('relatório mensal')) {
     const mesAtual = hoje.getMonth();
     const anoAtual = hoje.getFullYear();
-    const primeiroDiaDoMes = new Date(anoAtual, mesAtual, 1);
+    const primeiroDia = new Date(anoAtual, mesAtual, 1);
 
     const meusGastos = gastos.filter(g => {
       const data = new Date(g.data);
-      return g.usuario === numero && data >= primeiroDiaDoMes && data <= hoje;
+      return g.usuario === numero && data >= primeiroDia && data <= hoje;
     });
 
     if (meusGastos.length === 0) {
-      return res.send('Nenhum gasto encontrado neste mês 🗓️');
+      return res.send('Nenhum gasto registrado neste mês 🗓️');
     }
 
     return res.send(gerarResumo(meusGastos, 'mensal (1º até hoje)'));
@@ -110,7 +109,7 @@ app.post('/webhook', (req, res) => {
     return res.send(gerarResumo(meusGastos, 'geral'));
   }
 
-  // Cadastro de novo gasto
+  // Cadastro de gasto
   const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
   const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
 
@@ -139,7 +138,7 @@ app.post('/webhook', (req, res) => {
   res.send(`Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`);
 });
 
-// Rota de relatório por navegador
+// 🔎 Relatório por navegador
 app.get('/relatorio/:usuario', (req, res) => {
   const usuario = req.params.usuario;
   const gastos = lerGastos();
@@ -170,7 +169,7 @@ app.get('/relatorio/:usuario', (req, res) => {
   res.json(resposta);
 });
 
-// ✅ Rota de backup: gera download do arquivo gastos.json
+// 💾 Rota de backup
 app.get('/backup', (req, res) => {
   try {
     const dados = fs.readFileSync(arquivoGastos);
