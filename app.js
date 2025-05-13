@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const categorias = require('./categorias');
 const app = express();
 
@@ -28,6 +29,24 @@ function salvarGasto(gasto) {
   fs.writeFileSync(arquivoGastos, JSON.stringify(dados, null, 2));
 }
 
+// 🔁 Função que envia mensagem de volta via Z-API
+async function enviarResposta(numero, mensagem) {
+  const instanciaId = '3E126FC63F55D002CB47AAEF140028B5';
+  const token = '2041E2CA4AF17D4509230A8D';
+
+  const url = `https://api.z-api.io/instances/${instanciaId}/token/${token}/send-text`;
+
+  try {
+    await axios.post(url, {
+      phone: numero,
+      message: mensagem
+    });
+    console.log('✅ Mensagem enviada para o usuário:', numero);
+  } catch (err) {
+    console.error('❌ Erro ao enviar resposta ao WhatsApp:', err.message);
+  }
+}
+
 function gerarResumo(gastos, tipo) {
   let total = 0;
   const categorias = {};
@@ -49,7 +68,7 @@ function gerarResumo(gastos, tipo) {
 }
 
 // 🟢 Webhook da Z-API
-app.post('/webhook', (req, res) => {
+app.post('/webhook', async (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
   const mensagem = req.body.texto?.message?.toLowerCase() || '';
@@ -68,11 +87,12 @@ app.post('/webhook', (req, res) => {
       return g.usuario === numero && data >= domingo && data <= hoje;
     });
 
-    if (meusGastos.length === 0) {
-      return res.send('Nenhum gasto registrado entre domingo e hoje 🗓️');
-    }
+    const resposta = meusGastos.length === 0
+      ? 'Nenhum gasto registrado entre domingo e hoje 🗓️'
+      : gerarResumo(meusGastos, 'semanal (domingo a hoje)');
 
-    return res.send(gerarResumo(meusGastos, 'semanal (domingo a hoje)'));
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
   }
 
   // Relatório mensal
@@ -86,22 +106,24 @@ app.post('/webhook', (req, res) => {
       return g.usuario === numero && data >= primeiroDia && data <= hoje;
     });
 
-    if (meusGastos.length === 0) {
-      return res.send('Nenhum gasto registrado neste mês 🗓️');
-    }
+    const resposta = meusGastos.length === 0
+      ? 'Nenhum gasto registrado neste mês 🗓️'
+      : gerarResumo(meusGastos, 'mensal (1º até hoje)');
 
-    return res.send(gerarResumo(meusGastos, 'mensal (1º até hoje)'));
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
   }
 
   // Relatório geral
   if (mensagem.includes('meu relatório')) {
     const meusGastos = gastos.filter(g => g.usuario === numero);
 
-    if (meusGastos.length === 0) {
-      return res.send('Nenhum gasto encontrado para você ainda 😕');
-    }
+    const resposta = meusGastos.length === 0
+      ? 'Nenhum gasto encontrado para você ainda 😕'
+      : gerarResumo(meusGastos, 'geral');
 
-    return res.send(gerarResumo(meusGastos, 'geral'));
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
   }
 
   // Cadastro de gasto
@@ -116,11 +138,10 @@ app.post('/webhook', (req, res) => {
     }
   }
 
- if (!valor) {
-  console.log('🔴 Nenhum valor reconhecido na mensagem:', mensagem);
-  return res.send('❌ Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
-}
-
+  if (!valor) {
+    await enviarResposta(numero, '❌ Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
+    return res.sendStatus(200);
+  }
 
   const gasto = {
     usuario: numero,
@@ -132,7 +153,9 @@ app.post('/webhook', (req, res) => {
   salvarGasto(gasto);
   console.log(`Gasto registrado: ${JSON.stringify(gasto)}`);
 
-  res.send(`Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`);
+  const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`;
+  await enviarResposta(numero, resposta);
+  res.sendStatus(200);
 });
 
 // 🔎 Relatório por navegador
