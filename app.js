@@ -55,6 +55,9 @@ function gerarResumo(gastos, tipo) {
 
 // Webhook
 app.post('/webhook', (req, res) => {
+  console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
+
+  
   const mensagem = req.body.message?.text?.toLowerCase() || '';
   const numero = req.body.from || 'desconhecido';
   const hoje = new Date();
