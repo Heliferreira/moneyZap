@@ -105,7 +105,7 @@ app.post('/webhook', (req, res) => {
   }
 
   // Cadastro de gasto
-  const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
+  const valorMatch = mensagem.replace(/\s+/g, ' ').match(/(\d+[\.,]?\d*)/);
   const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
 
   let categoriaDetectada = 'Outros';
@@ -116,9 +116,11 @@ app.post('/webhook', (req, res) => {
     }
   }
 
-  if (!valor) {
-    return res.send('Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
-  }
+ if (!valor) {
+  console.log('🔴 Nenhum valor reconhecido na mensagem:', mensagem);
+  return res.send('❌ Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
+}
+
 
   const gasto = {
     usuario: numero,
