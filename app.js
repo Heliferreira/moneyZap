@@ -52,13 +52,9 @@ function gerarResumo(gastos, tipo) {
 app.post('/webhook', (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
-  const mensagem =
-    req.body.message?.text?.toLowerCase() ||
-    req.body.text?.toLowerCase() ||
-    req.body.message?.toLowerCase() ||
-    '';
+  const mensagem = req.body.texto?.message?.toLowerCase() || '';
+  const numero = req.body.telefone || 'desconhecido';
 
-  const numero = req.body.phone || req.body.from || 'desconhecido';
   const hoje = new Date();
   const gastos = lerGastos();
 
