@@ -44,7 +44,15 @@ app.post('/webhook', async (req, res) => {
   console.dir(req.body, { depth: null });
 
   const textoRaw = req.body.texto || req.body.text;
-  const numero = (req.body.telefone || req.body.from || '').toString().trim();
+  let numero = '';
+if ('telefone' in req.body && typeof req.body.telefone === 'string') {
+  numero = req.body.telefone.trim();
+} else if ('from' in req.body && typeof req.body.from === 'string') {
+  numero = req.body.from.trim();
+}
+
+  console.log('📱 Número final utilizado:', numero);
+
   console.log('📱 Número recebido:', numero);
 
   let mensagem = '';
