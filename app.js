@@ -72,8 +72,18 @@ app.post('/webhook', async (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
   let mensagem = '';
+  const textoRaw = req.body.texto;
+  console.log('📦 Tipo de req.body.texto:', typeof textoRaw);
+  console.log('📦 Conteúdo:', textoRaw);
+
   try {
-    mensagem = String(req.body.texto?.message || '').toLowerCase().trim();
+    if (typeof textoRaw === 'string') {
+      mensagem = textoRaw.toLowerCase().trim();
+    } else if (typeof textoRaw === 'object' && textoRaw.message) {
+      mensagem = textoRaw.message.toLowerCase().trim();
+    } else {
+      mensagem = '';
+    }
   } catch (err) {
     console.log('❌ Erro ao extrair mensagem:', err.message);
   }
