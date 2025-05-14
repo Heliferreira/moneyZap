@@ -69,7 +69,14 @@ function gerarResumo(gastos, tipo) {
 
 // 🟢 Webhook da Z-API
 app.post('/webhook', async (req, res) => {
+  // Log do JSON completo (já estava)
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
+
+  // 🔍 Log para inspeção detalhada das chaves
+  console.log('🧾 Estrutura COMPLETA recebida:');
+  for (const chave in req.body) {
+    console.log(`🔑 ${chave}:`, req.body[chave]);
+  }
 
   let mensagem = '';
   const textoRaw = req.body.texto;
