@@ -1,10 +1,14 @@
 const express = require('express');
+const bodyParser = require('body-parser');
 const fs = require('fs');
 const categorias = require('./categorias');
 const { enviarResposta } = require('./zapi');
 
 const app = express();
-app.use(express.json());
+
+// 🛠️ Garante que o corpo da requisição será interpretado corretamente
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 function lerGastos() {
   try {
@@ -37,7 +41,7 @@ function gerarResumo(gastos, tipo) {
   return resposta;
 }
 
-// 🟢 Webhook da Z-API
+  // 🟢 Webhook da Z-API
 app.post('/webhook', async (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
