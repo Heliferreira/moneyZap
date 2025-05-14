@@ -43,12 +43,16 @@ function gerarResumo(gastos, tipo) {
 
   // 🟢 Webhook da Z-API
 app.post('/webhook', async (req, res) => {
-  console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
+  console.log('\n🔍 REQ.BODY INTEIRO 🔍');
+  console.dir(req.body, { depth: null });
+  const numero = req.body.telefone || 'NADA ENCONTRADO';
+  console.log('📱 Valor direto de req.body.telefone:', numero);
+
 
   const textoRaw = req.body.texto;
 
   // 🟢 Corrige a leitura do número de forma segura
-  const numero = (req.body.telefone ?? req.body.from ?? '').toString().trim();
+  
   console.log('🔍 Estrutura completa do req.body:', JSON.stringify(req.body, null, 2));
 
   console.log('📱Número recebido:', numero);
