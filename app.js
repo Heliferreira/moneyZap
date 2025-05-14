@@ -69,27 +69,19 @@ function gerarResumo(gastos, tipo) {
 
 // 🟢 Webhook da Z-API
 app.post('/webhook', async (req, res) => {
-  // Log do JSON completo (já estava)
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
-  // 🔍 Log para inspeção detalhada das chaves
-  console.log('🧾 Estrutura COMPLETA recebida:');
-  for (const chave in req.body) {
-    console.log(`🔑 ${chave}:`, req.body[chave]);
-  }
-
-  let mensagem = '';
+  // 🔍 Logs para diagnóstico
   const textoRaw = req.body.texto;
   console.log('📦 Tipo de req.body.texto:', typeof textoRaw);
   console.log('📦 Conteúdo:', textoRaw);
 
+  let mensagem = '';
   try {
     if (typeof textoRaw === 'string') {
       mensagem = textoRaw.toLowerCase().trim();
     } else if (typeof textoRaw === 'object' && textoRaw.message) {
-      mensagem = textoRaw.mensagem.toLowerCase().trim();
-    } else {
-      mensagem = '';
+      mensagem = textoRaw.message.toLowerCase().trim();
     }
   } catch (err) {
     console.log('❌ Erro ao extrair mensagem:', err.message);
@@ -155,6 +147,45 @@ app.post('/webhook', async (req, res) => {
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
+
+  // Cadastro de gasto
+  const textoLimpo = mensagem.replace(/\s+/g, ' ').trim();
+  console.log('🧾 Texto limpo:', textoLimpo);
+
+  const valorMatch = textoLimpo.match(/\d+(?:[\.,]\d{1,2})?/);
+  console.log('🔍 Resultado do match:', valorMatch);
+
+  const valor = valorMatch ? parseFloat(valorMatch[0].replace(',', '.')) : null;
+
+  if (!valor) {
+    console.log('🔴 Nenhum valor reconhecido na mensagem:', textoLimpo);
+    await enviarResposta(numero, '❌ Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
+    return res.sendStatus(200);
+  }
+
+  let categoriaDetectada = 'Outros';
+  for (const palavra in categorias) {
+    if (mensagem.includes(palavra)) {
+      categoriaDetectada = categorias[palavra];
+      break;
+    }
+  }
+
+  const gasto = {
+    usuario: numero,
+    valor,
+    categoria: categoriaDetectada,
+    data: hoje.toISOString().split('T')[0]
+  };
+
+  salvarGasto(gasto);
+  console.log(`✅ Gasto registrado: ${JSON.stringify(gasto)}`);
+
+  const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`;
+  console.log(`🔄 Enviando para Z-API: ${numero} => ${resposta}`);
+  await enviarResposta(numero, resposta);
+  res.sendStatus(200);
+});
 
   // Cadastro de gasto
   const textoLimpo = mensagem.replace(/\s+/g, ' ').trim();
