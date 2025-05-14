@@ -1,60 +1,85 @@
 const express = require('express');
 const fs = require('fs');
 const categorias = require('./categorias');
-const { enviarResposta } = require('./zapi'); // se você criou esse arquivo separado
+const { enviarResposta } = require('./zapi');
 
 const app = express();
 app.use(express.json());
 
-// Utilitário: ler e salvar gastos
-const lerGastos = () => {
+function lerGastos() {
   try {
-    return JSON.parse(fs.readFileSync('gastos.json'));
-  } catch {
+    const dados = fs.readFileSync('gastos.json', 'utf-8');
+    return JSON.parse(dados);
+  } catch (err) {
     return [];
   }
-};
-const salvarGasto = (gasto) => {
-  const dados = lerGastos();
-  dados.push(gasto);
-  fs.writeFileSync('gastos.json', JSON.stringify(dados, null, 2));
-};
+}
 
-// Utilitário: gerar resumo por categoria
-const gerarResumo = (gastos, tipo) => {
+function salvarGastos(novosGastos) {
+  fs.writeFileSync('gastos.json', JSON.stringify(novosGastos, null, 2));
+}
+
+function gerarResumo(gastos, tipo) {
+  const total = gastos.reduce((soma, g) => soma + g.valor, 0);
   const categoriasResumo = {};
-  let total = 0;
-
-  for (const g of gastos) {
-    total += g.valor;
-    categoriasResumo[g.categoria] = (categoriasResumo[g.categoria] || 0) + g.valor;
+  for (const gasto of gastos) {
+    if (!categoriasResumo[gasto.categoria]) {
+      categoriasResumo[gasto.categoria] = 0;
+    }
+    categoriasResumo[gasto.categoria] += gasto.valor;
   }
 
   let resposta = `📊 *Seu relatório ${tipo}:*\n- Total: R$ ${total.toFixed(2)}\n`;
   for (const cat in categoriasResumo) {
     resposta += `- ${cat}: R$ ${categoriasResumo[cat].toFixed(2)}\n`;
   }
-
-  resposta += `\n📌 Lançamentos: ${gastos.length}`;
+  resposta += `\n🧾 Lançamentos: ${gastos.length}`;
   return resposta;
-};
+}
 
 // 🟢 Webhook da Z-API
 app.post('/webhook', async (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
   const textoRaw = req.body.texto;
-  let mensagem = '';
-
-  if (typeof textoRaw === 'string') {
-    mensagem = textoRaw.toLowerCase().trim();
-  } else if (typeof textoRaw === 'object' && textoRaw.mensagem) {
-    mensagem = textoRaw.mensagem.toLowerCase().trim();
-  }
-
   const numero = req.body.telefone || 'desconhecido';
   const hoje = new Date();
   const gastos = lerGastos();
+
+  let mensagem = '';
+  if (typeof textoRaw === 'object' && (textoRaw.message || textoRaw.mensagem)) {
+    mensagem = (textoRaw.message || textoRaw.mensagem).toLowerCase().trim();
+  }
+
+  // 🔍 Extrair valor
+  const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
+  const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
+
+  // 🧠 Detectar categoria
+  let categoriaDetectada = 'Outros';
+  for (const palavra in categorias) {
+    if (mensagem.includes(palavra)) {
+      categoriaDetectada = categorias[palavra];
+      break;
+    }
+  }
+
+  // ✅ Registrar gasto
+  if (valor) {
+    const novoGasto = {
+      usuario: numero,
+      valor,
+      categoria: categoriaDetectada,
+      data: hoje.toISOString().split('T')[0]
+    };
+
+    gastos.push(novoGasto);
+    salvarGastos(gastos);
+
+    const resposta = `✅ Gasto registrado!\n• Valor: R$ ${valor}\n• Categoria: ${categoriaDetectada}\n• Data: ${novoGasto.data}`;
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
+  }
 
   // 📅 Relatório semanal
   if (mensagem.includes('relatório semanal')) {
@@ -68,7 +93,7 @@ app.post('/webhook', async (req, res) => {
     });
 
     const resposta = meusGastos.length === 0
-      ? 'Nenhum gasto registrado entre domingo e hoje 🗓️'
+      ? '📉 Nenhum gasto registrado entre domingo e hoje.'
       : gerarResumo(meusGastos, 'semanal (domingo a hoje)');
 
     await enviarResposta(numero, resposta);
@@ -87,7 +112,7 @@ app.post('/webhook', async (req, res) => {
     });
 
     const resposta = meusGastos.length === 0
-      ? 'Nenhum gasto registrado neste mês 🗓️'
+      ? '📉 Nenhum gasto registrado neste mês.'
       : gerarResumo(meusGastos, 'mensal (1º até hoje)');
 
     await enviarResposta(numero, resposta);
@@ -99,47 +124,34 @@ app.post('/webhook', async (req, res) => {
     const meusGastos = gastos.filter(g => g.usuario === numero);
 
     const resposta = meusGastos.length === 0
-      ? 'Nenhum gasto encontrado para você ainda 😕'
+      ? '📉 Nenhum gasto encontrado para você ainda.'
       : gerarResumo(meusGastos, 'geral');
 
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
 
-  // 💸 Cadastro de gasto
-  const textoLimpo = mensagem.replace(/\s+/g, ' ').trim();
-  const valorMatch = textoLimpo.match(/\d+(?:[\.,]\d{1,2})?/);
-  const valor = valorMatch ? parseFloat(valorMatch[0].replace(',', '.')) : null;
-
-  if (!valor) {
-    await enviarResposta(numero, '❌ Não consegui entender o valor. Tente algo como: "gastei 35 no mercado".');
-    return res.sendStatus(200);
-  }
-
-  let categoriaDetectada = 'Outros';
-  for (const palavra in categorias) {
-    if (mensagem.includes(palavra)) {
-      categoriaDetectada = categorias[palavra];
-      break;
-    }
-  }
-
-  const gasto = {
-    usuario: numero,
-    valor,
-    categoria: categoriaDetectada,
-    data: hoje.toISOString().split('T')[0]
-  };
-
-  salvarGasto(gasto);
-
-  const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${gasto.data}`;
-  await enviarResposta(numero, resposta);
-  res.sendStatus(200);
+  // ❌ Mensagem inválida
+  const respostaErro = '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "relatório semanal".';
+  await enviarResposta(numero, respostaErro);
+  return res.sendStatus(200);
 });
 
-// 🔒 Porta do servidor
+// 📦 Rota de backup
+app.get('/backup', (req, res) => {
+  try {
+    const dados = fs.readFileSync('gastos.json');
+    const nomeArquivo = `gastos-backup-${Date.now()}.json`;
+    res.header('Content-Type', 'application/json');
+    res.attachment(nomeArquivo);
+    res.send(dados);
+  } catch (err) {
+    console.error('Erro ao gerar backup:', err);
+    res.status(500).send('Erro ao gerar backup.');
+  }
+});
+
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Bot rodando na porta ${PORT}`);
+  console.log(`Bot rodando na porta ${PORT}`);
 });
