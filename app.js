@@ -44,7 +44,8 @@ app.post('/webhook', async (req, res) => {
   const textoRaw = req.body.texto;
 
   // 🟢 Corrige a leitura do número de forma segura
-  const numero = (req.body.telefone || req.body.from || '').toString().trim();
+  const numero = (req.body.telefone ?? req.body.from ?? '').toString().trim();
+  console.log('📱Número recebido (bruto):', req.body.telefone, '| Usado:', numero);
 
   console.log('📱Número recebido:', numero);
 
