@@ -151,6 +151,12 @@ app.get('/backup', (req, res) => {
   }
 });
 
+// 🌐 Rota padrão para teste no navegador
+app.get('/', (req, res) => {
+  res.send('🚀 API MoneyZap está rodando com sucesso!');
+});
+
+// 🟢 Inicia o servidor
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Bot rodando na porta ${PORT}`);
