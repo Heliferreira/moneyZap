@@ -42,7 +42,12 @@ app.post('/webhook', async (req, res) => {
   console.log('Recebido da Z-API:', JSON.stringify(req.body, null, 2));
 
   const textoRaw = req.body.texto;
-  const numero = req.body.telefone || 'desconhecido';
+
+  // 🟢 Corrige a leitura do número de forma segura
+  const numero = (req.body.telefone || req.body.from || '').toString().trim();
+
+  console.log('📱Número recebido:', numero);
+
   const hoje = new Date();
   const gastos = lerGastos();
 
@@ -50,6 +55,7 @@ app.post('/webhook', async (req, res) => {
   if (typeof textoRaw === 'object' && (textoRaw.message || textoRaw.mensagem)) {
     mensagem = (textoRaw.message || textoRaw.mensagem).toLowerCase().trim();
   }
+
 
   // 🔍 Extrair valor
   const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
