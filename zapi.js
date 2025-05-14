@@ -8,10 +8,11 @@ const API_URL = 'https://api.z-api.io/instances/3E126FC63F55D002CB47AAEF140028B5
 
 async function enviarResposta(telefone, mensagem) {
   try {
-    const resposta = await axios.post(API_URL, {
-      phone: telefone,
-      message: mensagem
+        const resposta = await axios.post(API_URL, {
+      phone: String(telefone),
+      message: String(mensagem).trim()
     });
+
 
     console.log(`✅ Resposta enviada para ${telefone}`);
   } catch (err) {
