@@ -87,7 +87,7 @@ app.post('/webhook', async (req, res) => {
     if (typeof textoRaw === 'string') {
       mensagem = textoRaw.toLowerCase().trim();
     } else if (typeof textoRaw === 'object' && textoRaw.message) {
-      mensagem = textoRaw.message.toLowerCase().trim();
+      mensagem = textoRaw.mensagem.toLowerCase().trim();
     } else {
       mensagem = '';
     }
