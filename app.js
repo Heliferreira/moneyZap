@@ -5,74 +5,61 @@ const categorias = require('./categorias');
 const { enviarResposta } = require('./zapi');
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-// 🛠️ Garante que o corpo da requisição será interpretado corretamente
+// Middleware para garantir leitura correta do corpo da requisição
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Funções auxiliares
 function lerGastos() {
-  try {
-    const dados = fs.readFileSync('gastos.json', 'utf-8');
-    return JSON.parse(dados);
-  } catch (err) {
-    return [];
-  }
+  if (!fs.existsSync('gastos.json')) return [];
+  const dados = fs.readFileSync('gastos.json');
+  return JSON.parse(dados);
 }
 
-function salvarGastos(novosGastos) {
-  fs.writeFileSync('gastos.json', JSON.stringify(novosGastos, null, 2));
+function salvarGasto(gasto) {
+  const gastos = lerGastos();
+  gastos.push(gasto);
+  fs.writeFileSync('gastos.json', JSON.stringify(gastos, null, 2));
 }
 
 function gerarResumo(gastos, tipo) {
-  const total = gastos.reduce((soma, g) => soma + g.valor, 0);
-  const categoriasResumo = {};
-  for (const gasto of gastos) {
-    if (!categoriasResumo[gasto.categoria]) {
-      categoriasResumo[gasto.categoria] = 0;
-    }
-    categoriasResumo[gasto.categoria] += gasto.valor;
-  }
+  if (!gastos.length) return 'Nenhum gasto encontrado.';
+  let total = 0;
+  let texto = '📊 *Resumo de Gastos*\n';
 
-  let resposta = `📊 *Seu relatório ${tipo}:*\n- Total: R$ ${total.toFixed(2)}\n`;
-  for (const cat in categoriasResumo) {
-    resposta += `- ${cat}: R$ ${categoriasResumo[cat].toFixed(2)}\n`;
-  }
-  resposta += `\n🧾 Lançamentos: ${gastos.length}`;
-  return resposta;
+  gastos.forEach(g => {
+    total += g.valor;
+    texto += `\n📅 ${g.data} | 💸 R$ ${g.valor.toFixed(2)} | 📂 ${g.categoria}`;
+  });
+
+  texto += `\n\n🔢 Total: R$ ${total.toFixed(2)}`;
+  return texto;
 }
 
-  // 🟢 Webhook da Z-API
-// 🟢 Webhook da Z-API
+// 🟢 Webhook
 app.post('/webhook', async (req, res) => {
-  console.log('📦 REQ.BODY INTEIRO:');
+  console.log('\n🔍 REQ.BODY INTEIRO 🔍');
   console.dir(req.body, { depth: null });
 
-  // 📱 Captura o número corretamente (pode vir em campos diferentes)
-  const numero =
-    (req.body.telefone ?? req.body.from ?? req.body.connectedPhone ?? '').toString().trim();
+  const textoRaw = req.body.texto || req.body.text;
+  const numero = (req.body.telefone || req.body.from || '').toString().trim();
+  console.log('📱 Número recebido:', numero);
 
-  if (!numero) {
-    console.warn('⚠️ Número pode estar em formato incorreto:', numero);
-  }
-  console.log('📱Número recebido:', numero);
-
-  // 🧾 Captura o texto da mensagem
-  const textoRaw = req.body.texto;
   let mensagem = '';
   if (typeof textoRaw === 'object' && (textoRaw.message || textoRaw.mensagem)) {
     mensagem = (textoRaw.message || textoRaw.mensagem).toLowerCase().trim();
   }
 
-  console.log('📨 Mensagem recebida:', mensagem);
-
-  const hoje = new Date();
+  const hoje = new Date().toISOString().split('T')[0];
   const gastos = lerGastos();
 
-  // 💵 Detectar valor
+  // 🧾 Captura valor numérico da mensagem
   const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
   const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
 
-  // 🗂️ Detectar categoria
+  // 🏷️ Detectar categoria
   let categoriaDetectada = 'Outros';
   for (const palavra in categorias) {
     if (mensagem.includes(palavra)) {
@@ -81,107 +68,67 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
-  // 📤 Responder com base na mensagem
-  let resposta = '';
   if (mensagem.includes('relatório semanal')) {
-    const diaDaSemana = hoje.getDay();
-    const domingo = new Date(hoje);
-    domingo.setDate(hoje.getDate() - diaDaSemana);
+    const hojeObj = new Date();
+    const diaSemana = hojeObj.getDay(); // 0 = domingo
+    const inicioSemana = new Date(hojeObj);
+    inicioSemana.setDate(hojeObj.getDate() - diaSemana);
 
-    const meusGastos = gastos.filter(g => {
-      const data = new Date(g.data);
-      return g.usuario === numero && data >= domingo && data <= hoje;
+    const gastosSemana = gastos.filter(g => {
+      const dataGasto = new Date(g.data);
+      return g.usuario === numero && dataGasto >= inicioSemana && dataGasto <= hojeObj;
     });
 
-    resposta =
-      meusGastos.length === 0
-        ? '📊 Nenhum gasto registrado entre domingo e hoje 💤'
-        : gerarResumo(meusGastos, 'semanal (domingo a hoje)');
-  } else if (mensagem.includes('relatório mensal')) {
-    const mesAtual = hoje.getMonth();
-    const anoAtual = hoje.getFullYear();
-    const primeiroDia = new Date(anoAtual, mesAtual, 1);
+    const resposta = gerarResumo(gastosSemana, 'semanal');
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
+  }
 
-    const meusGastos = gastos.filter(g => {
-      const data = new Date(g.data);
-      return g.usuario === numero && data >= primeiroDia && data <= hoje;
+  if (mensagem.includes('relatório mensal')) {
+    const hojeObj = new Date();
+    const ano = hojeObj.getFullYear();
+    const mes = hojeObj.getMonth();
+    const inicioMes = new Date(ano, mes, 1);
+
+    const gastosMes = gastos.filter(g => {
+      const dataGasto = new Date(g.data);
+      return g.usuario === numero && dataGasto >= inicioMes && dataGasto <= hojeObj;
     });
 
-    resposta =
-      meusGastos.length === 0
-        ? '📊 Nenhum gasto registrado neste mês 💤'
-        : gerarResumo(meusGastos, 'mensal (1º até hoje)');
-  } else if (mensagem.includes('meu relatório')) {
+    const resposta = gerarResumo(gastosMes, 'mensal');
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
+  }
+
+  if (mensagem.includes('meu relatório')) {
     const meusGastos = gastos.filter(g => g.usuario === numero);
+    const resposta = gerarResumo(meusGastos, 'geral');
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
+  }
 
-    resposta =
-      meusGastos.length === 0
-        ? '📊 Nenhum gasto encontrado para você ainda 😬'
-        : gerarResumo(meusGastos, 'geral');
-  } else if (valor) {
-    const novoGasto = {
+  // Registrar gasto se valor for reconhecido
+  if (valor) {
+    const gasto = {
       usuario: numero,
       valor,
       categoria: categoriaDetectada,
-      data: hoje.toISOString().split('T')[0],
+      data: hoje
     };
 
-    const dados = lerGastos();
-    dados.push(novoGasto);
-    salvarGastos(dados);
+    salvarGasto(gasto);
 
-    resposta = `✅ Gasto registrado com sucesso!\n💰 Valor: R$ ${valor}\n📂 Categoria: ${categoriaDetectada}`;
-  } else {
-    resposta =
-      '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "relatório semanal".';
-  }
-
-  console.log(`🔄 Enviando mensagem para ${numero}: ${resposta}`);
-  await enviarResposta(numero, resposta);
-
-  res.sendStatus(200);
-});
-
-  // 📋 Relatório geral
-  if (mensagem.includes('meu relatório')) {
-    const meusGastos = gastos.filter(g => g.usuario === numero);
-
-    const resposta = meusGastos.length === 0
-      ? '📉 Nenhum gasto encontrado para você ainda.'
-      : gerarResumo(meusGastos, 'geral');
-
+    const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${hoje}`;
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
 
   // ❌ Mensagem inválida
-else {
   const respostaErro = '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "relatório semanal".';
   await enviarResposta(numero, respostaErro);
   return res.sendStatus(200);
-};
-
-// 📦 Rota de backup
-app.get('/backup', (req, res) => {
-  try {
-    const dados = fs.readFileSync('gastos.json');
-    const nomeArquivo = `gastos-backup-${Date.now()}.json`;
-    res.header('Content-Type', 'application/json');
-    res.attachment(nomeArquivo);
-    res.send(dados);
-  } catch (err) {
-    console.error('Erro ao gerar backup:', err);
-    res.status(500).send('Erro ao gerar backup.');
-  }
 });
 
-// 🌐 Rota padrão para teste no navegador
-app.get('/', (req, res) => {
-  res.send('🚀 API MoneyZap está rodando com sucesso!');
-});
-
-// 🟢 Inicia o servidor
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`Bot rodando na porta ${PORT}`);
 });
