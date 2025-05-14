@@ -42,35 +42,37 @@ function gerarResumo(gastos, tipo) {
 }
 
   // 🟢 Webhook da Z-API
+// 🟢 Webhook da Z-API
 app.post('/webhook', async (req, res) => {
-  console.log('\n🔍 REQ.BODY INTEIRO 🔍');
+  console.log('📦 REQ.BODY INTEIRO:');
   console.dir(req.body, { depth: null });
-  const numero = req.body.telefone || 'NADA ENCONTRADO';
-  console.log('📱 Valor direto de req.body.telefone:', numero);
 
+  // 📱 Captura o número corretamente (pode vir em campos diferentes)
+  const numero =
+    (req.body.telefone ?? req.body.from ?? req.body.connectedPhone ?? '').toString().trim();
 
-  const textoRaw = req.body.texto;
-
-  // 🟢 Corrige a leitura do número de forma segura
-  
-  console.log('🔍 Estrutura completa do req.body:', JSON.stringify(req.body, null, 2));
-
+  if (!numero) {
+    console.warn('⚠️ Número pode estar em formato incorreto:', numero);
+  }
   console.log('📱Número recebido:', numero);
 
-  const hoje = new Date();
-  const gastos = lerGastos();
-
+  // 🧾 Captura o texto da mensagem
+  const textoRaw = req.body.texto;
   let mensagem = '';
   if (typeof textoRaw === 'object' && (textoRaw.message || textoRaw.mensagem)) {
     mensagem = (textoRaw.message || textoRaw.mensagem).toLowerCase().trim();
   }
 
+  console.log('📨 Mensagem recebida:', mensagem);
 
-  // 🔍 Extrair valor
+  const hoje = new Date();
+  const gastos = lerGastos();
+
+  // 💵 Detectar valor
   const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
   const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
 
-  // 🧠 Detectar categoria
+  // 🗂️ Detectar categoria
   let categoriaDetectada = 'Outros';
   for (const palavra in categorias) {
     if (mensagem.includes(palavra)) {
@@ -79,24 +81,8 @@ app.post('/webhook', async (req, res) => {
     }
   }
 
-  // ✅ Registrar gasto
-  if (valor) {
-    const novoGasto = {
-      usuario: numero,
-      valor,
-      categoria: categoriaDetectada,
-      data: hoje.toISOString().split('T')[0]
-    };
-
-    gastos.push(novoGasto);
-    salvarGastos(gastos);
-
-    const resposta = `✅ Gasto registrado!\n• Valor: R$ ${valor}\n• Categoria: ${categoriaDetectada}\n• Data: ${novoGasto.data}`;
-    await enviarResposta(numero, resposta);
-    return res.sendStatus(200);
-  }
-
-  // 📅 Relatório semanal
+  // 📤 Responder com base na mensagem
+  let resposta = '';
   if (mensagem.includes('relatório semanal')) {
     const diaDaSemana = hoje.getDay();
     const domingo = new Date(hoje);
@@ -107,16 +93,11 @@ app.post('/webhook', async (req, res) => {
       return g.usuario === numero && data >= domingo && data <= hoje;
     });
 
-    const resposta = meusGastos.length === 0
-      ? '📉 Nenhum gasto registrado entre domingo e hoje.'
-      : gerarResumo(meusGastos, 'semanal (domingo a hoje)');
-
-    await enviarResposta(numero, resposta);
-    return res.sendStatus(200);
-  }
-
-  // 📆 Relatório mensal
-  if (mensagem.includes('relatório mensal')) {
+    resposta =
+      meusGastos.length === 0
+        ? '📊 Nenhum gasto registrado entre domingo e hoje 💤'
+        : gerarResumo(meusGastos, 'semanal (domingo a hoje)');
+  } else if (mensagem.includes('relatório mensal')) {
     const mesAtual = hoje.getMonth();
     const anoAtual = hoje.getFullYear();
     const primeiroDia = new Date(anoAtual, mesAtual, 1);
@@ -126,13 +107,40 @@ app.post('/webhook', async (req, res) => {
       return g.usuario === numero && data >= primeiroDia && data <= hoje;
     });
 
-    const resposta = meusGastos.length === 0
-      ? '📉 Nenhum gasto registrado neste mês.'
-      : gerarResumo(meusGastos, 'mensal (1º até hoje)');
+    resposta =
+      meusGastos.length === 0
+        ? '📊 Nenhum gasto registrado neste mês 💤'
+        : gerarResumo(meusGastos, 'mensal (1º até hoje)');
+  } else if (mensagem.includes('meu relatório')) {
+    const meusGastos = gastos.filter(g => g.usuario === numero);
 
-    await enviarResposta(numero, resposta);
-    return res.sendStatus(200);
+    resposta =
+      meusGastos.length === 0
+        ? '📊 Nenhum gasto encontrado para você ainda 😬'
+        : gerarResumo(meusGastos, 'geral');
+  } else if (valor) {
+    const novoGasto = {
+      usuario: numero,
+      valor,
+      categoria: categoriaDetectada,
+      data: hoje.toISOString().split('T')[0],
+    };
+
+    const dados = lerGastos();
+    dados.push(novoGasto);
+    salvarGastos(dados);
+
+    resposta = `✅ Gasto registrado com sucesso!\n💰 Valor: R$ ${valor}\n📂 Categoria: ${categoriaDetectada}`;
+  } else {
+    resposta =
+      '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "relatório semanal".';
   }
+
+  console.log(`🔄 Enviando mensagem para ${numero}: ${resposta}`);
+  await enviarResposta(numero, resposta);
+
+  res.sendStatus(200);
+});
 
   // 📋 Relatório geral
   if (mensagem.includes('meu relatório')) {
@@ -147,10 +155,11 @@ app.post('/webhook', async (req, res) => {
   }
 
   // ❌ Mensagem inválida
+else {
   const respostaErro = '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "relatório semanal".';
   await enviarResposta(numero, respostaErro);
   return res.sendStatus(200);
-});
+};
 
 // 📦 Rota de backup
 app.get('/backup', (req, res) => {
