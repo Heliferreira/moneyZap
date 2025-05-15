@@ -1,10 +1,6 @@
-// ✅ zapi.js - Corrigido com Client-Token no cabeçalho
 const axios = require('axios');
 
-const INSTANCIA_ID = '3E126FC63F55D002CB47AAEF140028B5';
-const TOKEN = '2041E2CA4AF17D4509230A8D';
-const API_URL = `https://api.z-api.io/instances/${INSTANCIA_ID}/send-text`;
-
+const API_URL = 'https://api.z-api.io/instances/3E126FC63F55D002CB47AAEF140028B5/token/2041E2CA4AF17D4509230A8D/send-text';
 
 async function enviarResposta(telefone, mensagem) {
   try {
@@ -15,14 +11,15 @@ async function enviarResposta(telefone, mensagem) {
 
     const config = {
       headers: {
-        'Client-Token': TOKEN
+        'Content-Type': 'application/json',
+        'Client-Token': '2041E2CA4AF17D4509230A8D'
       }
     };
 
-    console.log('📦 Enviando requisição bruta com headers fixos:');
+    console.log('📦 Enviando requisição...');
     console.log('URL:', API_URL);
-    console.log('Payload:', JSON.stringify(payload, null, 2));
-    console.log('Headers:', JSON.stringify(config.headers, null, 2));
+    console.log('Payload:', JSON.stringify(payload));
+    console.log('Headers:', JSON.stringify(config.headers));
 
     const resposta = await axios.post(API_URL, payload, config);
 
