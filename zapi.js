@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const API_URL = 'https://api.z-api.io/instances/3E126FC63F55D002CB47AAEF140028B5/token/2041E2CA4AF17D4509230A8D/send-text';
+const API_URL = 'https://api.z-api.io/instances/3E126FC63F55D002CB47AAEF140028B5/send-text';
 const CLIENT_TOKEN = '2041E2CA4AF17D4509230A8D';
 
 async function enviarResposta(telefone, mensagem) {
@@ -13,7 +13,7 @@ async function enviarResposta(telefone, mensagem) {
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        'Client-Token': CLIENT_TOKEN // 🔒 obrigatório pra contas novas
+        'Client-Token': CLIENT_TOKEN
       }
     };
 
