@@ -1,4 +1,4 @@
-// ✅ zapi.js - Arquivo atualizado com envio de resposta para Z-API
+// ✅ zapi.js - Arquivo atualizado com envio de resposta para Z-API com cabeçalho obrigatório
 
 const axios = require('axios');
 
@@ -8,12 +8,15 @@ const TOKEN = '2041E2CA4AF17D4509230A8D';
 
 const API_URL = `https://api.z-api.io/instances/${INSTANCIA_ID}/token/${TOKEN}/send-text`;
 
-
 async function enviarResposta(telefone, mensagem) {
   try {
     const resposta = await axios.post(API_URL, {
       phone: telefone,
       message: mensagem,
+    }, {
+      headers: {
+        'Client-Token': TOKEN
+      }
     });
 
     console.log(`✅ Mensagem enviada com sucesso para ${telefone}`);
