@@ -38,22 +38,24 @@ function gerarResumo(gastos, tipo) {
   return texto;
 }
 
-// 🟢 Webhook
+// 🟢 Webhook 
 app.post('/webhook', async (req, res) => {
   console.log('\n🔍 REQ.BODY INTEIRO 🔍');
   console.dir(req.body, { depth: null });
 
   const textoRaw = req.body.texto || req.body.text;
+
+  // ✅ Correção do campo de número baseado na documentação oficial
   let numero = '';
-if ('telefone' in req.body && typeof req.body.telefone === 'string') {
-  numero = req.body.telefone.trim();
-} else if ('from' in req.body && typeof req.body.from === 'string') {
-  numero = req.body.from.trim();
-}
+  if ('phone' in req.body && typeof req.body.phone === 'string') {
+    numero = req.body.phone.trim();
+  } else if ('telefone' in req.body && typeof req.body.telefone === 'string') {
+    numero = req.body.telefone.trim();
+  } else if ('from' in req.body && typeof req.body.from === 'string') {
+    numero = req.body.from.trim();
+  }
 
   console.log('📱 Número final utilizado:', numero);
-
-  console.log('📱 Número recebido:', numero);
 
   let mensagem = '';
   if (typeof textoRaw === 'object' && (textoRaw.message || textoRaw.mensagem)) {
