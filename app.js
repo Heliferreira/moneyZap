@@ -7,11 +7,10 @@ const { enviarResposta } = require('./zapi');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Middleware para garantir leitura correta do corpo da requisição
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Funções auxiliares
+// Utilitários
 function lerGastos() {
   if (!fs.existsSync('gastos.json')) return [];
   const dados = fs.readFileSync('gastos.json');
@@ -22,6 +21,15 @@ function salvarGasto(gasto) {
   const gastos = lerGastos();
   gastos.push(gasto);
   fs.writeFileSync('gastos.json', JSON.stringify(gastos, null, 2));
+}
+
+function identificarCategoria(mensagem) {
+  for (const palavra in categorias) {
+    if (mensagem.includes(palavra)) {
+      return categorias[palavra];
+    }
+  }
+  return 'Outros';
 }
 
 function gerarResumo(gastos, tipo) {
@@ -38,19 +46,21 @@ function gerarResumo(gastos, tipo) {
   return texto;
 }
 
-// 🟢 Webhook 
-// ✅ Webhook da Z-API
+// 🟢 Webhook da Z-API
 app.post('/webhook', async (req, res) => {
   console.log('🔍 REQ.BODY INTEIRO 🔍');
   console.dir(req.body, { depth: null });
 
-  // Extrai os dados principais
   const textoRaw = req.body.texto;
-  const numero = req.body.telefone || req.body.from || 'NÚMERO_NÃO_ENCONTRADO';
+  const numero = req.body.telefone;
+
+  if (!numero) {
+    console.error('❌ Número do remetente não encontrado.');
+    return res.sendStatus(400);
+  }
 
   console.log('📱 Número final utilizado:', numero);
 
-  // Garante que a mensagem seja tratada como string
   let mensagem = '';
   if (typeof textoRaw === 'object' && (textoRaw.message || textoRaw.mensagem)) {
     mensagem = (textoRaw.message || textoRaw.mensagem).toLowerCase().trim();
@@ -59,7 +69,6 @@ app.post('/webhook', async (req, res) => {
   }
 
   const hoje = new Date();
-  const gastos = lerGastos();
 
   // ✅ Cadastro de gasto
   if (mensagem.startsWith('gastei')) {
@@ -73,16 +82,16 @@ app.post('/webhook', async (req, res) => {
       data: hoje.toISOString().split('T')[0]
     };
 
-    gastos.push(novoGasto);
-    salvarGastos(gastos);
+    salvarGasto(novoGasto);
 
     const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoria}\n- Data: ${novoGasto.data}`;
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
 
-  // ✅ Relatório geral
+  // ✅ Relatório
   if (mensagem.includes('meu relatório')) {
+    const gastos = lerGastos();
     const meusGastos = gastos.filter(g => g.usuario === numero);
 
     const resposta = meusGastos.length === 0
@@ -93,13 +102,12 @@ app.post('/webhook', async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // ❌ Mensagem inválida
+  // ❌ Comando inválido
   const respostaErro = '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "meu relatório".';
   await enviarResposta(numero, respostaErro);
   return res.sendStatus(200);
 });
 
-
 app.listen(PORT, () => {
-  console.log(`Bot rodando na porta ${PORT}`);
+  console.log(`✅ Bot rodando na porta ${PORT}`);
 });
