@@ -32,10 +32,11 @@ function identificarCategoria(mensagem) {
   return 'Outros';
 }
 
-function gerarResumo(gastos, tipo) {
+function gerarResumo(gastos) {
   if (!gastos.length) return 'Nenhum gasto encontrado.';
   let total = 0;
-  let texto = '📊 *Resumo de Gastos*\n';
+  let texto = '📊 *Resumo de Gastos*';
+
 
   gastos.forEach(g => {
     total += g.valor;
@@ -46,18 +47,38 @@ function gerarResumo(gastos, tipo) {
   return texto;
 }
 
+function filtrarPorPeriodo(gastos, inicio, fim) {
+  return gastos.filter(g => {
+    const data = new Date(g.data);
+    return data >= inicio && data <= fim;
+  });
+}
+
+function obterInicioDaSemana(data = new Date()) {
+  const dia = data.getDay();
+  const inicio = new Date(data);
+  inicio.setDate(data.getDate() - dia);
+  inicio.setHours(0, 0, 0, 0);
+  return inicio;
+}
+
+function obterInicioDoMes(data = new Date()) {
+  return new Date(data.getFullYear(), data.getMonth(), 1);
+}
+
+function obterInicioDoDia(data = new Date()) {
+  const inicio = new Date(data);
+  inicio.setHours(0, 0, 0, 0);
+  return inicio;
+}
+
 // 🟢 Webhook da Z-API
 app.post('/webhook', async (req, res) => {
   console.log('🔍 REQ.BODY INTEIRO 🔍');
   console.dir(req.body, { depth: null });
 
   const textoRaw = req.body.texto || req.body.text?.mensagem || req.body.text?.message;
-
-// ✅ Captura o número corretamente mesmo com possíveis traduções
   const numero = req.body.telefone || req.body.Telefone || req.body.phone || req.body.from || 'NÚMERO_NÃO_ENCONTRADO';
-
-  console.log('📱 Número final utilizado:', numero);
-
 
   if (!numero) {
     console.error('❌ Número do remetente não encontrado.');
@@ -69,14 +90,15 @@ app.post('/webhook', async (req, res) => {
   let mensagem = '';
   if (typeof textoRaw === 'object' && (textoRaw.message || textoRaw.mensagem)) {
     mensagem = (textoRaw.message || textoRaw.mensagem)
-  .toLowerCase()
-  .replace(/^"+|"+$/g, '')  // remove aspas extras do início/fim
-  .trim();
+      .toLowerCase()
+      .replace(/^"+|"+$/g, '')
+      .trim();
   } else if (typeof textoRaw === 'string') {
     mensagem = textoRaw.toLowerCase().trim();
   }
 
   const hoje = new Date();
+  const gastos = lerGastos();
 
   // ✅ Cadastro de gasto
   if (mensagem.startsWith('gastei')) {
@@ -97,21 +119,46 @@ app.post('/webhook', async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // ✅ Relatório
-  if (mensagem.includes('meu relatório')) {
-    const gastos = lerGastos();
-    const meusGastos = gastos.filter(g => g.usuario === numero);
+  // ✅ Relatórios por período
+  const meusGastos = gastos.filter(g => g.usuario === numero);
 
+  if (mensagem.includes('relatório semanal')) {
+    const inicio = obterInicioDaSemana();
+    const fim = hoje;
+    const filtrados = filtrarPorPeriodo(meusGastos, inicio, fim);
+    const resposta = gerarResumo(filtrados);
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
+  }
+
+  if (mensagem.includes('relatório mensal')) {
+    const inicio = obterInicioDoMes();
+    const fim = hoje;
+    const filtrados = filtrarPorPeriodo(meusGastos, inicio, fim);
+    const resposta = gerarResumo(filtrados);
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
+  }
+
+  if (mensagem.includes('relatório diário')) {
+    const inicio = obterInicioDoDia();
+    const fim = hoje;
+    const filtrados = filtrarPorPeriodo(meusGastos, inicio, fim);
+    const resposta = gerarResumo(filtrados);
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
+  }
+
+  if (mensagem.includes('meu relatório')) {
     const resposta = meusGastos.length === 0
       ? '❗ Nenhum gasto encontrado para você ainda.'
-      : gerarResumo(meusGastos, 'geral');
-
+      : gerarResumo(meusGastos);
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
 
   // ❌ Comando inválido
-  const respostaErro = '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "meu relatório".';
+  const respostaErro = '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado", "relatório semanal", "relatório mensal" ou "relatório diário".';
   await enviarResposta(numero, respostaErro);
   return res.sendStatus(200);
 });
