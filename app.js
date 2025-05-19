@@ -39,105 +39,66 @@ function gerarResumo(gastos, tipo) {
 }
 
 // 🟢 Webhook 
+// ✅ Webhook da Z-API
 app.post('/webhook', async (req, res) => {
-  console.log('\n🔍 REQ.BODY INTEIRO 🔍');
+  console.log('🔍 REQ.BODY INTEIRO 🔍');
   console.dir(req.body, { depth: null });
 
-  const textoRaw = req.body.texto || req.body.text;
-
-  // ✅ Correção do campo de número baseado na documentação oficial
-  let numero = '';
-  if ('phone' in req.body && typeof req.body.phone === 'string') {
-    numero = req.body.phone.trim();
-  } else if ('telefone' in req.body && typeof req.body.telefone === 'string') {
-    numero = req.body.telefone.trim();
-  } else if ('from' in req.body && typeof req.body.from === 'string') {
-    numero = req.body.from.trim();
-  }
+  // Extrai os dados principais
+  const textoRaw = req.body.texto;
+  const numero = req.body.telefone || req.body.from || 'NÚMERO_NÃO_ENCONTRADO';
 
   console.log('📱 Número final utilizado:', numero);
 
+  // Garante que a mensagem seja tratada como string
   let mensagem = '';
   if (typeof textoRaw === 'object' && (textoRaw.message || textoRaw.mensagem)) {
     mensagem = (textoRaw.message || textoRaw.mensagem).toLowerCase().trim();
+  } else if (typeof textoRaw === 'string') {
+    mensagem = textoRaw.toLowerCase().trim();
   }
 
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = new Date();
   const gastos = lerGastos();
 
-  // 🧾 Captura valor numérico da mensagem
-  const valorMatch = mensagem.match(/(\d+[\.,]?\d*)/);
-  const valor = valorMatch ? parseFloat(valorMatch[1].replace(',', '.')) : null;
+  // ✅ Cadastro de gasto
+  if (mensagem.startsWith('gastei')) {
+    const valor = parseFloat(mensagem.replace(/[^0-9,.]/g, '').replace(',', '.'));
+    const categoria = identificarCategoria(mensagem);
 
-  // 🏷️ Detectar categoria
-  let categoriaDetectada = 'Outros';
-  for (const palavra in categorias) {
-    if (mensagem.includes(palavra)) {
-      categoriaDetectada = categorias[palavra];
-      break;
-    }
-  }
-
-  if (mensagem.includes('relatório semanal')) {
-    const hojeObj = new Date();
-    const diaSemana = hojeObj.getDay(); // 0 = domingo
-    const inicioSemana = new Date(hojeObj);
-    inicioSemana.setDate(hojeObj.getDate() - diaSemana);
-
-    const gastosSemana = gastos.filter(g => {
-      const dataGasto = new Date(g.data);
-      return g.usuario === numero && dataGasto >= inicioSemana && dataGasto <= hojeObj;
-    });
-
-    const resposta = gerarResumo(gastosSemana, 'semanal');
-    await enviarResposta(numero, resposta);
-    return res.sendStatus(200);
-  }
-
-  if (mensagem.includes('relatório mensal')) {
-    const hojeObj = new Date();
-    const ano = hojeObj.getFullYear();
-    const mes = hojeObj.getMonth();
-    const inicioMes = new Date(ano, mes, 1);
-
-    const gastosMes = gastos.filter(g => {
-      const dataGasto = new Date(g.data);
-      return g.usuario === numero && dataGasto >= inicioMes && dataGasto <= hojeObj;
-    });
-
-    const resposta = gerarResumo(gastosMes, 'mensal');
-    await enviarResposta(numero, resposta);
-    return res.sendStatus(200);
-  }
-
-  if (mensagem.includes('meu relatório')) {
-    const meusGastos = gastos.filter(g => g.usuario === numero);
-    const resposta = gerarResumo(meusGastos, 'geral');
-    await enviarResposta(numero, resposta);
-    return res.sendStatus(200);
-  }
-
-  // Registrar gasto se valor for reconhecido
-  if (valor) {
-    const gasto = {
+    const novoGasto = {
       usuario: numero,
       valor,
-      categoria: categoriaDetectada,
-      data: hoje
+      categoria,
+      data: hoje.toISOString().split('T')[0]
     };
 
-    salvarGasto(gasto);
+    gastos.push(novoGasto);
+    salvarGastos(gastos);
 
-    const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoriaDetectada}\n- Data: ${hoje}`;
+    const resposta = `✅ Gasto registrado!\n- Valor: R$ ${valor}\n- Categoria: ${categoria}\n- Data: ${novoGasto.data}`;
+    await enviarResposta(numero, resposta);
+    return res.sendStatus(200);
+  }
+
+  // ✅ Relatório geral
+  if (mensagem.includes('meu relatório')) {
+    const meusGastos = gastos.filter(g => g.usuario === numero);
+
+    const resposta = meusGastos.length === 0
+      ? '❗ Nenhum gasto encontrado para você ainda.'
+      : gerarResumo(meusGastos, 'geral');
+
     await enviarResposta(numero, resposta);
     return res.sendStatus(200);
   }
 
   // ❌ Mensagem inválida
-  const respostaErro = '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "relatório semanal".';
+  const respostaErro = '❌ Não entendi sua mensagem. Envie por exemplo: "gastei 25 no mercado" ou "meu relatório".';
   await enviarResposta(numero, respostaErro);
   return res.sendStatus(200);
 });
+
 
 app.listen(PORT, () => {
   console.log(`Bot rodando na porta ${PORT}`);

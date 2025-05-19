@@ -1,7 +1,10 @@
 const axios = require('axios');
 
-const API_URL = 'https://api.z-api.io/instances/3E126FC63F55D002CB47AAEF140028B5/send-text';
-const CLIENT_TOKEN = '2041E2CA4AF17D4509230A8D';
+const INSTANCIA_ID = '3E126FC63F55D002CB47AAEF140028B5';
+const TOKEN = 'B32E1BEB50B816C33D2C27FD';
+const CLIENT_TOKEN = 'F7db7c86c49774947a0988d171f317f82S';
+
+const API_URL = `https://api.z-api.io/instances/${INSTANCIA_ID}/token/${TOKEN}/send-text`;
 
 async function enviarResposta(telefone, mensagem) {
   try {
@@ -19,8 +22,8 @@ async function enviarResposta(telefone, mensagem) {
 
     console.log('📦 Enviando requisição...');
     console.log('URL:', API_URL);
-    console.log('Payload:', JSON.stringify(payload));
-    console.log('Headers:', JSON.stringify(config.headers));
+    console.log('Payload:', JSON.stringify(payload, null, 2));
+    console.log('Headers:', JSON.stringify(config.headers, null, 2));
 
     const resposta = await axios.post(API_URL, payload, config);
 
