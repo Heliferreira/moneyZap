@@ -52,7 +52,12 @@ app.post('/webhook', async (req, res) => {
   console.dir(req.body, { depth: null });
 
   const textoRaw = req.body.texto;
-  const numero = req.body.telefone;
+
+// ✅ Captura o número corretamente mesmo com possíveis traduções
+  const numero = req.body.telefone || req.body.Telefone || req.body.phone || req.body.from || 'NÚMERO_NÃO_ENCONTRADO';
+
+  console.log('📱 Número final utilizado:', numero);
+
 
   if (!numero) {
     console.error('❌ Número do remetente não encontrado.');
