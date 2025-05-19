@@ -51,7 +51,7 @@ app.post('/webhook', async (req, res) => {
   console.log('🔍 REQ.BODY INTEIRO 🔍');
   console.dir(req.body, { depth: null });
 
-  const textoRaw = req.body.texto;
+  const textoRaw = req.body.texto || req.body.text?.mensagem || req.body.text?.message;
 
 // ✅ Captura o número corretamente mesmo com possíveis traduções
   const numero = req.body.telefone || req.body.Telefone || req.body.phone || req.body.from || 'NÚMERO_NÃO_ENCONTRADO';
